@@ -1,14 +1,31 @@
 ﻿{
-    "name" : "fluent-logger-d",
-    "description" : "A structured logger for (D).",
-    "authors" : ["Masahiro Nakagawa", "David Eagen"],
-    "license" : "Apache-2.0",
-    "buildOptions": ["warningsAsErrors"],
-    "sourcePaths": ["src"],
-    "excludedSourceFiles": ["src/vendor/*"],
-    "targetType": "library",
+	"name" : "fluent-logger-d",
+	"description" : "A structured logger for (D).",
+	"authors" : ["Masahiro Nakagawa", "David Eagen"],
+	"license" : "Apache-2.0",
+	"buildOptions": ["warningsAsErrors"],
+	"targetType": "library",
+	"targetName": "libfluentlogger.a",
+	"dependencies": {
+		"msgpack-d": "~master"
+	},
 
-    "dependencies": {
-        "msgpack-d": "~master"
-    }
+	"configurations": [
+		{	
+			"name": "post-example",
+			"targetType": "executable",
+			"targetName": "post",
+			"targetPath": "example",
+			"sourceFiles": ["example/post.d"],
+			"mainSourceFile": "example/post.d"
+		},
+		{	
+			"name": "post-mt-example",
+			"targetType": "executable",
+			"targetName": "post_mt",
+			"targetPath": "example",
+			"sourceFiles": ["example/post_mt.d"],
+			"mainSourceFile": "example/post_mt.d"
+		}
+   	],
 }

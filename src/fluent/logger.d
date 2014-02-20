@@ -38,7 +38,7 @@ module fluent.logger;
 private import core.sync.mutex;
 private import std.array;
 private import std.datetime : Clock, SysTime;
-private import std.socket : getAddressInfo, ProtocolType, Socket, SocketException, 
+private import std.socket : getAddress, ProtocolType, Socket, SocketException, 
                             SocketShutdown, SocketType, TcpSocket;
 
 debug import std.stdio;  // TODO: replace with std.log
@@ -222,29 +222,26 @@ class FluentLogger : Logger
     @trusted
     void connect()
     {
-        auto addrInfos = getAddressInfo(config_.host, SocketType.STREAM, ProtocolType.TCP);
-        if (addrInfos is null)
-            throw new Exception("Failed to resolve host: hsot = " ~ config_.host);
+        auto addresses = getAddress(config_.host, config_.port);
+        if (addresses.length == 0)
+            throw new Exception("Failed to resolve host: host = " ~ config_.host);
 
         // hostname sometimes provides many address informations
-        foreach (i, ref addrInfo; addrInfos) {
+		foreach (i, ref address; addresses) {
             try {
-                auto socket = new TcpSocket(addrInfo.family);
-                auto endpoint = addrInfo.address;
-
-                socket.connect(endpoint);
-                socket_    = socket;
+                auto socket = new TcpSocket(address);
+				socket_    = socket;
                 errorNum_  = 0;
                 errorTime_ = SysTime.init;
 
-                debug { writeln("Connect to: host = ", config_.host, ", port = ", config_.port); }
+                debug { writeln("Connected to: host = ", config_.host, ", port = ", config_.port); }
 
                 return;
             } catch (SocketException e) {
                 clearSocket();
 
                 // If all hosts can't be connected, raises an exeception
-                if (i == addrInfos.length - 1) {
+                if (i == addresses.length - 1) {
                     errorNum_++;
                     errorTime_ = Clock.currTime();
 
