@@ -35,14 +35,15 @@
 
 module fluent.logger;
 
-import core.sync.mutex;
-import std.array;
-import std.datetime : Clock, SysTime;
+private import core.sync.mutex;
+private import std.array;
+private import std.datetime : Clock, SysTime;
+private import std.socket : getAddressInfo, ProtocolType, Socket, SocketException, 
+                            SocketShutdown, SocketType, TcpSocket;
 
 debug import std.stdio;  // TODO: replace with std.log
 
-import msgpack;
-import socket;  // I don't understand std.socket API ;-(
+private import msgpack;
 
 
 /**
@@ -90,7 +91,7 @@ class Tester : Logger
 
 
   public:
-    @safe
+    /* @safe */
     this(in string prefix)
     {
         super(prefix);
@@ -144,7 +145,7 @@ class FluentLogger : Logger
 
     //Appender!(ubyte[]) buffer_;  // Appender's qualifiers are broken...
     ubyte[]            buffer_;  // should have limit?
-    Socket!IPEndpoint  socket_;
+    TcpSocket  socket_;
 
     // for reconnection
     uint    errorNum_;
@@ -155,7 +156,7 @@ class FluentLogger : Logger
 
 
   public:
-    @safe
+    /* @safe */
     this(in string prefix, in Configuration config)
     {
         super(prefix);
@@ -190,8 +191,8 @@ class FluentLogger : Logger
                     }
                 }
 
-                socket_.shutdown(SocketShutdown.both);
-                clear(socket_);
+                socket_.shutdown(SocketShutdown.BOTH);
+                socket_.close();
                 socket_ = null;
             }
         }
@@ -221,15 +222,15 @@ class FluentLogger : Logger
     @trusted
     void connect()
     {
-        auto addrInfos = getAddressInfo(config_.host, SocketType.stream, ProtocolType.tcp);
+        auto addrInfos = getAddressInfo(config_.host, SocketType.STREAM, ProtocolType.TCP);
         if (addrInfos is null)
             throw new Exception("Failed to resolve host: hsot = " ~ config_.host);
 
         // hostname sometimes provides many address informations
         foreach (i, ref addrInfo; addrInfos) {
             try {
-                auto socket = new Socket!IPEndpoint(addrInfo);
-                auto endpoint = IPEndpoint(addrInfo.ipAddress, config_.port);
+                auto socket = new TcpSocket(addrInfo.family);
+                auto endpoint = addrInfo.address;
 
                 socket.connect(endpoint);
                 socket_    = socket;
@@ -259,6 +260,7 @@ class FluentLogger : Logger
         if (socket_ is null)
             connect();
 
+        /* TODO: Check for and deal with Socket.ERROR (send failures) */
         socket_.send(data);
 
         debug { writeln("Sent: ", data.length, " bytes"); }

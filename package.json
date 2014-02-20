@@ -1,0 +1,14 @@
+﻿{
+    "name" : "fluent-logger-d",
+    "description" : "A structured logger for (D).",
+    "authors" : ["Masahiro Nakagawa", "David Eagen"],
+    "license" : "Apache-2.0",
+    "buildOptions": ["warningsAsErrors"],
+    "sourcePaths": ["src"],
+    "excludedSourceFiles": ["src/vendor/*"],
+    "targetType": "library",
+
+    "dependencies": {
+        "msgpack-d": "~master"
+    }
+}
