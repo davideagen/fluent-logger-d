@@ -4,18 +4,21 @@
 	"authors" : ["Masahiro Nakagawa", "David Eagen"],
 	"license" : "Apache-2.0",
 	"buildOptions": ["warningsAsErrors"],
-	"targetType": "library",
-	"targetName": "libfluentlogger.a",
+	"targetPath": "bin",
 	"dependencies": {
 		"msgpack-d": "~master"
 	},
 
 	"configurations": [
+		{
+			"name": "library",
+			"targetName": "fluentlogger",
+			"targetType": "library",
+		},
 		{	
 			"name": "post-example",
 			"targetType": "executable",
 			"targetName": "post",
-			"targetPath": "example",
 			"sourceFiles": ["example/post.d"],
 			"mainSourceFile": "example/post.d"
 		},
@@ -23,7 +26,6 @@
 			"name": "post-mt-example",
 			"targetType": "executable",
 			"targetName": "post_mt",
-			"targetPath": "example",
 			"sourceFiles": ["example/post_mt.d"],
 			"mainSourceFile": "example/post_mt.d"
 		}
