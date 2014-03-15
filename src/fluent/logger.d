@@ -38,8 +38,8 @@ module fluent.logger;
 private import core.sync.mutex;
 private import std.array;
 private import std.datetime : Clock, SysTime;
-private import std.socket : getAddress, ProtocolType, Socket, SocketException, 
-                            SocketShutdown, SocketType, TcpSocket;
+private import std.socket : getAddress, lastSocketError, ProtocolType, Socket,
+                            SocketException, SocketShutdown, SocketType, TcpSocket;
 
 debug import std.stdio;  // TODO: replace with std.log
 
@@ -187,7 +187,7 @@ class FluentLogger : Logger
                         send(buffer_);
                         buffer_ = null;
                     } catch (const SocketException e) {
-                        debug { writeln("Failed to flush logs"); }
+                        debug { writeln("Failed to flush logs. ", buffer_.length, " bytes not sent."); }
                     }
                 }
 
@@ -257,8 +257,11 @@ class FluentLogger : Logger
         if (socket_ is null)
             connect();
 
-        /* TODO: Check for and deal with Socket.ERROR (send failures) */
-        socket_.send(data);
+        auto bytesSent = socket_.send(data);
+        if(bytesSent == Socket.ERROR)
+        {
+            throw new SocketException("Unable to send to socket. ", lastSocketError());
+        }
 
         debug { writeln("Sent: ", data.length, " bytes"); }
     }

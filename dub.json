@@ -3,7 +3,6 @@
 	"description" : "A structured logger for (D).",
 	"authors" : ["Masahiro Nakagawa", "David Eagen"],
 	"license" : "Apache-2.0",
-	"buildOptions": ["warningsAsErrors"],
 	"targetPath": "bin",
 	"dependencies": {
 		"msgpack-d": "~master"
