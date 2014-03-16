@@ -160,7 +160,7 @@ class FluentLogger : Logger
     Mutex mutex_;
 
 
-  public:
+  public: final:
     /* @safe */
     this(in string prefix, in Configuration config)
     {
@@ -232,7 +232,7 @@ class FluentLogger : Logger
     }
 
 
-  private:
+  private: final:
     @trusted
     void connect()
     {
