@@ -177,6 +177,7 @@ class FluentLogger : Logger
     ~this()
     {
         close();
+		buffer_.free();
     }
 
     /**
