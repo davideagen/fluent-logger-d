@@ -128,6 +128,7 @@ class Tester : Logger
  */
 class FluentLogger : Logger
 {
+  private import std.buffer.scopebuffer : scopeBuffer, ScopeBuffer;
   public:
     /**
      * FluentLogger configuration
@@ -136,7 +137,11 @@ class FluentLogger : Logger
     {
         string host = "localhost";
         ushort port = 24224;
-        // size_t bufferLimit = 4 * 1024 * 1024;
+        /* 
+         * uint instead of size_t because that's the limit of ScopeBuffer
+         * which is used to store the actual data.
+         */
+        uint initialBufferSize = 4 * 1024 * 1024;
     }
 
 
@@ -144,7 +149,7 @@ class FluentLogger : Logger
     immutable Configuration config_;
 
     //Appender!(ubyte[]) buffer_;  // Appender's qualifiers are broken...
-    ubyte[]            buffer_;  // should have limit?
+    ScopeBuffer!ubyte buffer_ = void;
     TcpSocket  socket_;
 
     // for reconnection
@@ -163,6 +168,10 @@ class FluentLogger : Logger
 
         config_ = config;
         mutex_ = new Mutex();
+
+        ubyte tmpBuf[];
+        tmpBuf.reserve = config.initialBufferSize;
+        buffer_ = scopeBuffer(tmpBuf);
     }
 
     ~this()
@@ -170,11 +179,16 @@ class FluentLogger : Logger
         close();
     }
 
+    /**
+     * Returns:
+     *  A slice into the buffer of data waiting to be sent that is only
+     *  valid until the next post() or write().
+     */
     @property
     override const(ubyte[]) pendings() const
     {
         synchronized(mutex_) {
-            return buffer_;
+            return buffer_[];
         }
     }
 
@@ -184,8 +198,8 @@ class FluentLogger : Logger
             if (socket_ !is null) {
                 if (buffer_.length > 0) {
                     try {
-                        send(buffer_);
-                        buffer_ = null;
+                        send(buffer_[]);
+                        buffer_.length = 0;
                     } catch (const SocketException e) {
                         debug { writeln("Failed to flush logs. ", buffer_.length, " bytes not sent."); }
                     }
@@ -201,13 +215,13 @@ class FluentLogger : Logger
     override bool write(in ubyte[] data)
     {
         synchronized(mutex_) {
-            buffer_ ~= data;
+            buffer_.put(data);
             if (!canWrite())
                 return false;
 
             try {
-                send(buffer_);
-                buffer_ = buffer_.ptr[0..0];
+                send(buffer_[]);
+                buffer_.length = 0;
             } catch (SocketException e) {
                 clearSocket();
                 throw e;
