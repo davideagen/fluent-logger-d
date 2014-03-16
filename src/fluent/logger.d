@@ -141,7 +141,7 @@ class FluentLogger : Logger
          * uint instead of size_t because that's the limit of ScopeBuffer
          * which is used to store the actual data.
          */
-        uint initialBufferSize = 4 * 1024 * 1024;
+        uint initialBufferSize = 256 * 1024;
     }
 
 
