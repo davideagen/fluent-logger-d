@@ -7,24 +7,47 @@
  * http://forum.dlang.org/thread/ld2586$17f6$1@digitalmars.com
  */
 
-module std.buffer.scopebuffer;
 
+/*
+ * Copyright: 2014 by Digital Mars
+ * License: $(LINK2 http://boost.org/LICENSE_1_0.txt, Boost License 1.0).
+ * Authors: Walter Bright
+ * Source: $(PHOBOSSRC std/internal/_scopebuffer.d)
+ */
+
+module std.internal.scopebuffer;
+
+
+//debug=ScopeBuffer;
+
+private import core.exception;
+private import core.stdc.stdlib : realloc;
+private import std.traits;
 
 /**************************************
  * ScopeBuffer encapsulates using a local array as a temporary buffer.
  * It is initialized with the local array that should be large enough for
  * most uses. If the need exceeds the size, ScopeBuffer will resize it
  * using malloc() and friends.
+ *
  * ScopeBuffer cannot contain more than (uint.max-16)/2 elements.
+ *
  * ScopeBuffer is an OutputRange.
+ *
+ * Since ScopeBuffer potentially stores elements of type T in malloc'd memory,
+ * those elements are not scanned when the GC collects. This can cause
+ * memory corruption. Do not use ScopeBuffer when elements of type T point
+ * to the GC heap.
+ *
  * Example:
 ---
 import core.stdc.stdio;
-import std.buffer.scopebuffer;
+import std.internal.scopebuffer;
 void main()
 {
     char[2] buf = void;
     auto textbuf = ScopeBuffer!char(buf);
+    scope(exit) textbuf.free(); // necessary for cleanup
 
     // Put characters and strings into textbuf, verify they got there
     textbuf.put('a');
@@ -47,49 +70,64 @@ void main()
     textbuf.length = 0;
 }
 ---
- * ScopeBuffer's contents are destroyed when ScopeBuffer goes out of scope.
+ * It is invalid to access ScopeBuffer's contents when ScopeBuffer goes out of scope.
  * Hence, copying the contents are necessary to keep them around:
 ---
-import std.buffer.scopebuffer;
+import std.internal.scopebuffer;
 string cat(string s1, string s2)
 {
     char[10] tmpbuf = void;
     auto textbuf = ScopeBuffer!char(tmpbuf);
+    scope(exit) textbuf.free();
     textbuf.put(s1);
     textbuf.put(s2);
     textbuf.put("even more");
     return textbuf[].idup;
 }
 ---
+ * ScopeBuffer is intended for high performance usages in $(D @system) and $(D @trusted) code.
+ * It is designed to fit into two 64 bit registers, again for high performance use.
+ * If used incorrectly, memory leaks and corruption can result. Be sure to use
+ * $(D scope(exit) textbuf.free();) for proper cleanup, and do not refer to a ScopeBuffer
+ * instance's contents after $(D ScopeBuffer.free()) has been called.
+ *
+ * The realloc parameter defaults to C's realloc(). Another can be supplied to override it.
+ *
+ * ScopeBuffer instances may be copied, as in:
+---
+textbuf = doSomething(textbuf, args);
+---
+ * which can be very efficent, but these must be regarded as a move rather than a copy.
+ * Additionally, the code between passing and returning the instance must not throw
+ * exceptions, otherwise when ScopeBuffer.free() is called, memory may get corrupted.
  */
 
-//debug=ScopeBuffer;
-
-private import std.traits;
-
-struct ScopeBuffer(T) if (isAssignable!T &&
-                          !hasElaborateDestructor!T &&
-                          !hasElaborateCopyConstructor!T &&
-                          !hasElaborateAssign!T)
+@system
+struct ScopeBuffer(T, alias realloc = core.stdc.stdlib.realloc)
+	if (isAssignable!T &&
+	    !hasElaborateDestructor!T &&
+	    !hasElaborateCopyConstructor!T &&
+	    !hasElaborateAssign!T)
 {
-	import core.stdc.stdlib : malloc, realloc, free;
 	import core.stdc.string : memcpy;
-	//import std.stdio;
 	
 	/**************************
      * Initialize with buf to use as scratch buffer space.
      * Params:
-     *  buf     Scratch buffer space, must have length that is even
+     *  buf = Scratch buffer space, must have length that is even
      * Example:
      * ---
      * ubyte[10] tmpbuf = void;
      * auto sbuf = ScopeBuffer!ubyte(tmpbuf);
      * ---
+     * If buf was created by the same realloc passed as a parameter
+     * to ScopeBuffer, then the contents of ScopeBuffer can be extracted without needing
+     * to copy them, and ScopeBuffer.free() will not need to be called.
      */
 	this(T[] buf)
 		in
 	{
-		assert(!(buf.length & resized));    // assure even length of scratch buffer space
+		assert(!(buf.length & wasResized));    // assure even length of scratch buffer space
 		assert(buf.length <= uint.max);     // because we cast to uint later
 	}
 	body
@@ -105,56 +143,64 @@ struct ScopeBuffer(T) if (isAssignable!T &&
 	}
 	
 	/**************************
-     * Destructor releases any memory used.
+     * Releases any memory used.
      * This will invalidate any references returned by the [] operator.
+     * A destructor is not used, because that would make it not POD
+     * (Plain Old Data) and it could not be placed in registers.
      */
-	~this()
+	void free()
 	{
 		debug(ScopeBuffer) buf[0 .. bufLen] = 0;
-		if (bufLen & resized)
-			free(buf);
+		if (bufLen & wasResized)
+			realloc(buf, 0);
 		buf = null;
 		bufLen = 0;
-		i = 0;
+		used = 0;
 	}
 	
 	/****************************
      * Copying of ScopeBuffer is not allowed.
      */
-	@disable this(this);
+	//@disable this(this);
 	
 	/************************
      * Append element c to the buffer.
+     * This member function makes ScopeBuffer an OutputRange.
      */
 	void put(T c)
 	{
-		/* j will get enregistered, while i will not because resize() may change i
+		/* j will get enregistered, while used will not because resize() may change used
          */
-		const j = i;
+		const j = used;
 		if (j == bufLen)
 		{
 			assert(j <= (uint.max - 16) / 2);
 			resize(j * 2 + 16);
 		}
 		buf[j] = c;
-		i = j + 1;
+		used = j + 1;
 	}
 	
 	/************************
      * Append array s to the buffer.
+     *
+     * If $(D const(T)) can be converted to $(D T), then put will accept
+     * $(D const(T)[] as input. It will accept a $(D T[]) otherwise.
      */
-	void put(const(T)[] s)
+	private alias CT = Select!(is(const(T) : T), const(T), T);
+	/// ditto
+	void put(CT[] s)
 	{
-		const newlen = i + s.length;
-		assert((cast(ulong)i + s.length) <= uint.max);
+		const newlen = used + s.length;
+		assert((cast(ulong)used + s.length) <= uint.max);
 		const len = bufLen;
 		if (newlen > len)
 		{
 			assert(len <= uint.max / 2);
 			resize(newlen <= len * 2 ? len * 2 : newlen);
 		}
-		buf[i .. newlen] = s[];
-		i = cast(uint)newlen;
+		buf[used .. newlen] = s[];
+		used = cast(uint)newlen;
 	}
 	
 	/******
@@ -178,14 +224,15 @@ struct ScopeBuffer(T) if (isAssignable!T &&
 	/// ditto
 	@system inout(T[]) opSlice() inout
 	{
-		assert(i <= bufLen);
-		return buf[0 .. i];
+		assert(used <= bufLen);
+		return buf[0 .. used];
 	}
 	
 	/*******
-     * Retrieve the element at index i.
+     * Returns:
+     *  the element at index i.
      */
-	T opIndex(size_t i)
+	ref T opIndex(size_t i)
 	{
 		assert(i < bufLen);
 		return buf[i];
@@ -195,9 +242,9 @@ struct ScopeBuffer(T) if (isAssignable!T &&
      * Returns:
      *  the number of elements in the ScopeBuffer
      */
-	@property size_t length()
+	@property size_t length() const
 	{
-		return i;
+		return used;
 	}
 	
 	/***
@@ -208,11 +255,11 @@ struct ScopeBuffer(T) if (isAssignable!T &&
 	@property void length(size_t i)
 	in
 	{
-		assert(i <= this.i);
+		assert(i <= this.used);
 	}
 	body
 	{
-		this.i = cast(uint)i;
+		this.used = cast(uint)i;
 	}
 	
 	alias opDollar = length;
@@ -221,8 +268,8 @@ private:
 	T* buf;
 	// Using uint instead of size_t so the struct fits in 2 registers in 64 bit code
 	uint bufLen;
-	enum resized = 1;         // this bit is set in bufLen if we control the memory
-	uint i;
+	enum wasResized = 1;         // this bit is set in bufLen if we control the memory
+	uint used;
 	
 	void resize(size_t newsize)
 		in
@@ -232,22 +279,13 @@ private:
 	body
 	{
 		//writefln("%s: oldsize %s newsize %s", id, buf.length, newsize);
-		void* newBuf;
-		newsize |= resized;
-		if (bufLen & resized)
+		newsize |= wasResized;
+		void *newBuf = realloc((bufLen & wasResized) ? buf : null, newsize * T.sizeof);
+		if (!newBuf)
+			core.exception.onOutOfMemoryError();
+		if (!(bufLen & wasResized))
 		{
-			/* Prefer realloc when possible
-             */
-			newBuf = realloc(buf, newsize * T.sizeof);
-			if (!newBuf)
-				assert(0);      // check stays even in -release mode
-		}
-		else
-		{
-			newBuf = malloc(newsize * T.sizeof);
-			if (!newBuf)
-				assert(0);
-			memcpy(newBuf, buf, i * T.sizeof);
+			memcpy(newBuf, buf, used * T.sizeof);
 			debug(ScopeBuffer) buf[0 .. bufLen] = 0;
 		}
 		buf = cast(T*)newBuf;
@@ -273,6 +311,7 @@ unittest
 	{
 		// Exercise all the lines of code except for assert(0)'s
 		auto textbuf = ScopeBuffer!char(tmpbuf);
+		scope(exit) textbuf.free();
 		
 		static assert(isOutputRange!(ScopeBuffer!char, char));
 		
@@ -312,6 +351,7 @@ unittest
 	{
 		char[10] tmpbuf = void;
 		auto textbuf = ScopeBuffer!char(tmpbuf);
+		scope(exit) textbuf.free();
 		textbuf.put(s1);
 		textbuf.put(s2);
 		textbuf.put("even more");
@@ -326,13 +366,14 @@ unittest
  * This is a slightly simpler way to create a ScopeBuffer instance
  * that uses type deduction.
  * Params:
- *      tmpbuf  the initial buffer to use
+ *      tmpbuf = the initial buffer to use
  * Returns:
  *      an instance of ScopeBuffer
  * Example:
 ---
 ubyte[10] tmpbuf = void;
 auto sb = scopeBuffer(tmpbuf);
+scope(exit) sp.free();
 ---
  */
 
@@ -345,4 +386,18 @@ unittest
 {
 	ubyte[10] tmpbuf = void;
 	auto sb = scopeBuffer(tmpbuf);
+	scope(exit) sb.free();
+}
+
+unittest
+{
+	ScopeBuffer!(int*) b;
+	int*[] s;
+	b.put(s);
+	
+	ScopeBuffer!char c;
+	string s1;
+	char[] s2;
+	c.put(s1);
+	c.put(s2);
 }
