@@ -128,7 +128,7 @@ class Tester : Logger
  */
 class FluentLogger : Logger
 {
-  private import std.buffer.scopebuffer : scopeBuffer, ScopeBuffer;
+  private import std.internal.scopebuffer : scopeBuffer, ScopeBuffer;
   public:
     /**
      * FluentLogger configuration
@@ -177,6 +177,7 @@ class FluentLogger : Logger
     ~this()
     {
         close();
+        buffer_.free();
     }
 
     /**
