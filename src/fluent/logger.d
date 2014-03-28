@@ -128,7 +128,7 @@ class Tester : Logger
  */
 class FluentLogger : Logger
 {
-  private import std.internal.scopebuffer : scopeBuffer, ScopeBuffer;
+  private import fluent.databuffer : dataBuffer, DataBuffer;
   public:
     /**
      * FluentLogger configuration
@@ -137,11 +137,7 @@ class FluentLogger : Logger
     {
         string host = "localhost";
         ushort port = 24224;
-        /* 
-         * uint instead of size_t because that's the limit of ScopeBuffer
-         * which is used to store the actual data.
-         */
-        uint initialBufferSize = 256 * 1024;
+        size_t initialBufferSize = 64;
     }
 
 
@@ -149,7 +145,7 @@ class FluentLogger : Logger
     immutable Configuration config_;
 
     //Appender!(ubyte[]) buffer_;  // Appender's qualifiers are broken...
-    ScopeBuffer!ubyte buffer_ = void;
+    DataBuffer!ubyte buffer_ = void;
     TcpSocket  socket_;
 
     // for reconnection
@@ -171,7 +167,7 @@ class FluentLogger : Logger
 
         ubyte tmpBuf[];
         tmpBuf.reserve = config.initialBufferSize;
-        buffer_ = scopeBuffer(tmpBuf);
+        buffer_ = dataBuffer(tmpBuf);
     }
 
     ~this()
