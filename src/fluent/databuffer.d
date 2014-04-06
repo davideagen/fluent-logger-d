@@ -162,11 +162,6 @@ struct DataBuffer(T, alias realloc = core.stdc.stdlib.realloc)
 		used = 0;
 	}
 	
-	/****************************
-     * Copying of DataBuffer is not allowed.
-     */
-	//@disable this(this);
-	
 	/************************
      * Append element c to the buffer.
      * This member function makes DataBuffer an OutputRange.
