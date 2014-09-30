@@ -155,7 +155,6 @@ class FluentLogger : Logger
     // for multi-threading
     Mutex mutex_;
 
-  final:	
   public:
 	/** 
 	 * Constructs a new $(D_PSYMBOL FluentLogger) instance using the given $(D_PSYMBOL Configuration). 
