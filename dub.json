@@ -1,7 +1,7 @@
 ﻿{
 	"name" : "fluent-logger-d",
 	"description" : "A structured logger for (D).",
-	"authors" : ["Masahiro Nakagawa", "David Eagen"],
+	"authors" : ["Masahiro Nakagawa"],
 	"license" : "Apache-2.0",
 	"targetPath": "bin",
 	"dependencies": {
