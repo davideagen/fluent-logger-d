@@ -383,7 +383,7 @@ class FluentLogger : Logger
             if (secs > ReconnectionWaitingMax)
                 secs = ReconnectionWaitingMax;
 
-            if ((Clock.currTime() - errorTime_).get!"seconds"() < secs)
+            if ((Clock.currTime() - errorTime_).total!"seconds"() < secs)
                 return false;
         }
 
