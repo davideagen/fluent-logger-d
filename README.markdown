@@ -38,11 +38,9 @@ So, if you share a logger object accross threads, please use ```__gshared```.
 
     The library: dub build
     Documentation: dub build --build=docs
-    Examples: 
-    	Single-threaded: dub build --config=post-example		
-    	Multi-threaded: dub build --config=post-mt-example	
-
-    % make -f posix.make
+    Examples:
+       Single-threaded: dub build --config=post-example
+       Multi-threaded: dub build --config=post-mt-example
 
 ## TODO
 

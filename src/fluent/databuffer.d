@@ -1,12 +1,15 @@
 ﻿/*
  * Copyright: 2014 by Digital Mars
  * License: $(LINK2 http://boost.org/LICENSE_1_0.txt, Boost License 1.0).
- * Authors: Walter Bright, David Eagen
+ * Authors: Walter Bright
+ * Source: $(PHOBOSSRC std/internal/_scopebuffer.d)
  * 
- * From https://raw.github.com/WalterBright/phobos/fluent.databufferbuffer/std/buffer/scopebuffer.d
+ * This module is based on Walter Bright's ScopeBuffer with slight modification. 
+ * https://raw.githubusercontent.com/WalterBright/phobos/master/std/internal/scopebuffer.d
  * http://forum.dlang.org/thread/ld2586$17f6$1@digitalmars.com
+ * http://wiki.dlang.org/Std.buffer.scopebuffer
  * 
- * Modifications:U
+ * Modifications:
  * 
  * - Use size_t instead of uint. This makes it slower than Walter's original 
  * version but we don't have deal with hitting the 32-bit limit. 
@@ -14,15 +17,7 @@
  * - "T[] opSlice()" changed to "inout(T[]) opSlice() inout". 
  *
  */
-
-
-/*
- * Copyright: 2014 by Digital Mars
- * License: $(LINK2 http://boost.org/LICENSE_1_0.txt, Boost License 1.0).
- * Authors: Walter Bright
- * Source: $(PHOBOSSRC std/internal/_scopebuffer.d)
- */
-
+ 
 module fluent.databuffer;
 
 
